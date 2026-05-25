@@ -197,25 +197,33 @@ async function assignRoles(){
         Math.min(3,Math.floor((total-1)/3))
     );
 
-    const shuffled=shuffle([...players]);
+    const shuffled=[...players].sort(()=>Math.random()-0.5);
 
-    const impostorList=shuffled.slice(0,impostors);
+    const impostorSet=new Set(
+        shuffled.slice(0,impostors).map(p=>p.id)
+    );
 
     for(let p of players){
 
-        let role="crewmate";
+        const role=impostorSet.has(p.id)?"impostor":"crewmate";
 
-        if(impostorList.find(i=>i.id===p.id)){
-            role="impostor";
-        }
-
-        const { error:updateError }=await supabase
+        const { data, error:updateError }=await supabase
             .from("players")
             .update({ role })
-            .eq("id",p.id);
+            .match({
+                id:p.id,
+                game_id:currentGame
+            })
+            .select();
 
         if(updateError){
-            console.error(updateError);
+            alert("Update failed: "+updateError.message);
+            return;
+        }
+
+        if(!data || data.length===0){
+            alert("No update happened for "+p.name+" (ID mismatch)");
+            return;
         }
     }
 }
