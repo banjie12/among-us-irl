@@ -5,7 +5,7 @@ let isHost=false;
 
 let playerId=localStorage.getItem("playerId");
 
-if(!playerId){
+if(!playerId||playerId==="null"||playerId==="undefined"){
     playerId=crypto.randomUUID();
     localStorage.setItem("playerId",playerId);
 }
@@ -13,6 +13,7 @@ if(!playerId){
 let playerName="";
 
 window.createGame=async()=>{
+
     playerName=document.getElementById("nameInput").value.trim();
 
     if(!playerName){
@@ -20,18 +21,32 @@ window.createGame=async()=>{
         return;
     }
 
+    playerId=localStorage.getItem("playerId");
+
+    if(!playerId){
+        playerId=crypto.randomUUID();
+        localStorage.setItem("playerId",playerId);
+    }
+
     const gameCode=Math.random().toString(36).substring(2,7).toUpperCase();
 
-    const { error }=await supabase
+    const { data,error }=await supabase
         .from("games")
         .insert({
             id:gameCode,
             state:"lobby",
             host_id:playerId
-        });
+        })
+        .select()
+        .single();
 
     if(error){
-        alert(error.message);
+        alert("Game creation failed: "+error.message);
+        return;
+    }
+
+    if(!data){
+        alert("Game not created properly");
         return;
     }
 
@@ -39,6 +54,7 @@ window.createGame=async()=>{
 };
 
 window.joinGame=async()=>{
+
     playerName=document.getElementById("nameInput").value.trim();
 
     const gameCode=document.getElementById("gameInput").value.trim().toUpperCase();
@@ -57,6 +73,7 @@ window.joinGame=async()=>{
 };
 
 async function joinToGame(gameCode){
+
     currentGame=gameCode;
 
     const { error }=await supabase
@@ -83,6 +100,7 @@ async function joinToGame(gameCode){
 }
 
 async function checkHost(gameCode){
+
     const { data,error }=await supabase
         .from("games")
         .select("host_id")
@@ -90,20 +108,21 @@ async function checkHost(gameCode){
         .single();
 
     if(error){
-        console.error(error);
+        alert("Host check failed");
         return;
     }
 
-    isHost=data.host_id===playerId;
+    isHost=(data.host_id===playerId);
 
-    const startButton=document.querySelector("#lobbyScreen button");
+    const btn=document.querySelector("#lobbyScreen button");
 
-    if(startButton){
-        startButton.style.display=isHost?"inline-block":"none";
+    if(btn){
+        btn.style.display=isHost?"inline-block":"none";
     }
 }
 
 async function loadPlayers(gameCode){
+
     const { data,error }=await supabase
         .from("players")
         .select("*")
@@ -125,9 +144,10 @@ async function loadPlayers(gameCode){
         .single();
 
     data.forEach(player=>{
+
         const li=document.createElement("li");
 
-        if(gameData && player.id===gameData.host_id){
+        if(gameData&&player.id===gameData.host_id){
             li.textContent=player.name+" 👑";
         }else{
             li.textContent=player.name;
@@ -138,6 +158,7 @@ async function loadPlayers(gameCode){
 }
 
 function subscribeToPlayers(gameCode){
+
     supabase
         .channel("players-"+gameCode)
         .on(
@@ -155,6 +176,7 @@ function subscribeToPlayers(gameCode){
 }
 
 window.startGame=async()=>{
+
     if(!isHost){
         alert("Only the host can start the game");
         return;
