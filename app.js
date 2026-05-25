@@ -1,6 +1,7 @@
 import { supabase } from "./supabase.js";
 
 let currentGame=null;
+let isHost=false;
 
 let playerId=localStorage.getItem("playerId");
 
@@ -21,12 +22,18 @@ window.createGame=async()=>{
 
     const gameCode=Math.random().toString(36).substring(2,7).toUpperCase();
 
-    await supabase
+    const { error }=await supabase
         .from("games")
         .insert({
             id:gameCode,
-            state:"lobby"
+            state:"lobby",
+            host_id:playerId
         });
+
+    if(error){
+        alert(error.message);
+        return;
+    }
 
     await joinToGame(gameCode);
 };
@@ -52,7 +59,7 @@ window.joinGame=async()=>{
 async function joinToGame(gameCode){
     currentGame=gameCode;
 
-    await supabase
+    const { error }=await supabase
         .from("players")
         .upsert({
             id:playerId,
@@ -61,29 +68,70 @@ async function joinToGame(gameCode){
             alive:true
         });
 
+    if(error){
+        alert(error.message);
+        return;
+    }
+
     document.getElementById("joinScreen").style.display="none";
     document.getElementById("lobbyScreen").style.display="block";
     document.getElementById("gameCode").textContent=gameCode;
 
+    await checkHost(gameCode);
     subscribeToPlayers(gameCode);
-
     await loadPlayers(gameCode);
 }
 
+async function checkHost(gameCode){
+    const { data,error }=await supabase
+        .from("games")
+        .select("host_id")
+        .eq("id",gameCode)
+        .single();
+
+    if(error){
+        console.error(error);
+        return;
+    }
+
+    isHost=data.host_id===playerId;
+
+    const startButton=document.querySelector("#lobbyScreen button");
+
+    if(startButton){
+        startButton.style.display=isHost?"inline-block":"none";
+    }
+}
+
 async function loadPlayers(gameCode){
-    const { data }=await supabase
+    const { data,error }=await supabase
         .from("players")
         .select("*")
         .eq("game_id",gameCode);
+
+    if(error){
+        console.error(error);
+        return;
+    }
 
     const list=document.getElementById("playerList");
 
     list.innerHTML="";
 
+    const { data:gameData }=await supabase
+        .from("games")
+        .select("host_id")
+        .eq("id",gameCode)
+        .single();
+
     data.forEach(player=>{
         const li=document.createElement("li");
 
-        li.textContent=player.name;
+        if(gameData && player.id===gameData.host_id){
+            li.textContent=player.name+" 👑";
+        }else{
+            li.textContent=player.name;
+        }
 
         list.appendChild(li);
     });
@@ -107,16 +155,22 @@ function subscribeToPlayers(gameCode){
 }
 
 window.startGame=async()=>{
-    if(!currentGame){
+    if(!isHost){
+        alert("Only the host can start the game");
         return;
     }
 
-    await supabase
+    const { error }=await supabase
         .from("games")
         .update({
             state:"started"
         })
         .eq("id",currentGame);
 
-    alert("Game state set to started");
+    if(error){
+        alert(error.message);
+        return;
+    }
+
+    alert("Game started");
 };
