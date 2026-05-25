@@ -15,17 +15,9 @@ let playerName="";
 window.createGame=async()=>{
 
     playerName=document.getElementById("nameInput").value.trim();
-
     if(!playerName){
         alert("Enter a name");
         return;
-    }
-
-    playerId=localStorage.getItem("playerId");
-
-    if(!playerId){
-        playerId=crypto.randomUUID();
-        localStorage.setItem("playerId",playerId);
     }
 
     const gameCode=Math.random().toString(36).substring(2,7).toUpperCase();
@@ -49,16 +41,15 @@ window.createGame=async()=>{
 window.joinGame=async()=>{
 
     playerName=document.getElementById("nameInput").value.trim();
-
     const gameCode=document.getElementById("gameInput").value.trim().toUpperCase();
 
     if(!playerName){
-        alert("Enter a name");
+        alert("Enter name");
         return;
     }
 
     if(!gameCode){
-        alert("Enter a game code");
+        alert("Enter code");
         return;
     }
 
@@ -89,6 +80,7 @@ async function joinToGame(gameCode){
 
     await checkHost(gameCode);
     subscribeToPlayers(gameCode);
+    subscribeToGame(gameCode);
     await loadPlayers(gameCode);
 }
 
@@ -108,7 +100,6 @@ async function checkHost(gameCode){
     isHost=(data.host_id===playerId);
 
     const btn=document.querySelector("#lobbyScreen button");
-
     if(btn){
         btn.style.display=isHost?"inline-block":"none";
     }
@@ -133,7 +124,6 @@ async function loadPlayers(gameCode){
         .single();
 
     const list=document.getElementById("playerList");
-
     list.innerHTML="";
 
     data.forEach(player=>{
@@ -146,12 +136,7 @@ async function loadPlayers(gameCode){
             text+=" 👑";
         }
 
-        if(player.role){
-            text+=" - "+player.role;
-        }
-
         li.textContent=text;
-
         list.appendChild(li);
     });
 }
@@ -169,6 +154,28 @@ function subscribeToPlayers(gameCode){
             },
             ()=>{
                 loadPlayers(gameCode);
+            }
+        )
+        .subscribe();
+}
+
+function subscribeToGame(gameCode){
+
+    supabase
+        .channel("game-"+gameCode)
+        .on(
+            "postgres_changes",
+            {
+                event:"UPDATE",
+                schema:"public",
+                table:"games",
+                filter:`id=eq.${gameCode}`
+            },
+            (payload)=>{
+
+                if(payload.new.state==="started"){
+                    showRoleScreen();
+                }
             }
         )
         .subscribe();
@@ -207,23 +214,16 @@ async function assignRoles(){
 
         const role=impostorSet.has(p.id)?"impostor":"crewmate";
 
-        const { data, error:updateError }=await supabase
+        const { error:updateError }=await supabase
             .from("players")
             .update({ role })
             .match({
                 id:p.id,
                 game_id:currentGame
-            })
-            .select();
+            });
 
         if(updateError){
-            alert("Update failed: "+updateError.message);
-            return;
-        }
-
-        if(!data || data.length===0){
-            alert("No update happened for "+p.name+" (ID mismatch)");
-            return;
+            console.error(updateError);
         }
     }
 }
@@ -231,7 +231,7 @@ async function assignRoles(){
 window.startGame=async()=>{
 
     if(!isHost){
-        alert("Only the host can start the game");
+        alert("Only host can start");
         return;
     }
 
@@ -249,5 +249,33 @@ window.startGame=async()=>{
         return;
     }
 
-    alert("Game started + roles assigned");
+    alert("Game started");
 };
+
+async function showRoleScreen(){
+
+    document.getElementById("lobbyScreen").style.display="none";
+    document.getElementById("roleScreen").style.display="block";
+
+    const { data,error }=await supabase
+        .from("players")
+        .select("role")
+        .eq("id",playerId)
+        .single();
+
+    if(error){
+        alert(error.message);
+        return;
+    }
+
+    const roleText=document.getElementById("roleText");
+    const sub=document.getElementById("roleSubText");
+
+    if(data.role==="impostor"){
+        roleText.textContent="IMPOSTOR";
+        sub.textContent="Eliminate crewmates.";
+    }else{
+        roleText.textContent="CREWMATE";
+        sub.textContent="Complete tasks and find impostors.";
+    }
+}
