@@ -30,23 +30,16 @@ window.createGame=async()=>{
 
     const gameCode=Math.random().toString(36).substring(2,7).toUpperCase();
 
-    const { data,error }=await supabase
+    const { error }=await supabase
         .from("games")
         .insert({
             id:gameCode,
             state:"lobby",
             host_id:playerId
-        })
-        .select()
-        .single();
+        });
 
     if(error){
-        alert("Game creation failed: "+error.message);
-        return;
-    }
-
-    if(!data){
-        alert("Game not created properly");
+        alert(error.message);
         return;
     }
 
@@ -108,7 +101,7 @@ async function checkHost(gameCode){
         .single();
 
     if(error){
-        alert("Host check failed");
+        alert(error.message);
         return;
     }
 
@@ -133,25 +126,31 @@ async function loadPlayers(gameCode){
         return;
     }
 
-    const list=document.getElementById("playerList");
-
-    list.innerHTML="";
-
     const { data:gameData }=await supabase
         .from("games")
         .select("host_id")
         .eq("id",gameCode)
         .single();
 
+    const list=document.getElementById("playerList");
+
+    list.innerHTML="";
+
     data.forEach(player=>{
 
         const li=document.createElement("li");
 
+        let text=player.name;
+
         if(gameData&&player.id===gameData.host_id){
-            li.textContent=player.name+" 👑";
-        }else{
-            li.textContent=player.name;
+            text+=" 👑";
         }
+
+        if(player.role){
+            text+=" - "+player.role;
+        }
+
+        li.textContent=text;
 
         list.appendChild(li);
     });
@@ -175,12 +174,60 @@ function subscribeToPlayers(gameCode){
         .subscribe();
 }
 
+function shuffle(arr){
+    return arr.sort(()=>Math.random()-0.5);
+}
+
+async function assignRoles(){
+
+    const { data:players,error }=await supabase
+        .from("players")
+        .select("*")
+        .eq("game_id",currentGame);
+
+    if(error){
+        alert(error.message);
+        return;
+    }
+
+    const total=players.length;
+
+    let impostors=Math.max(
+        1,
+        Math.min(3,Math.floor((total-1)/3))
+    );
+
+    const shuffled=shuffle([...players]);
+
+    const impostorList=shuffled.slice(0,impostors);
+
+    for(let p of players){
+
+        let role="crewmate";
+
+        if(impostorList.find(i=>i.id===p.id)){
+            role="impostor";
+        }
+
+        const { error:updateError }=await supabase
+            .from("players")
+            .update({ role })
+            .eq("id",p.id);
+
+        if(updateError){
+            console.error(updateError);
+        }
+    }
+}
+
 window.startGame=async()=>{
 
     if(!isHost){
         alert("Only the host can start the game");
         return;
     }
+
+    await assignRoles();
 
     const { error }=await supabase
         .from("games")
@@ -194,5 +241,5 @@ window.startGame=async()=>{
         return;
     }
 
-    alert("Game started");
+    alert("Game started + roles assigned");
 };
