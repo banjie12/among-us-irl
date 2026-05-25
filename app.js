@@ -12,6 +12,8 @@ if(!playerId||playerId==="null"||playerId==="undefined"){
 
 let playerName="";
 
+/* ================= CREATE GAME ================= */
+
 window.createGame=async()=>{
 
     playerName=document.getElementById("nameInput").value.trim();
@@ -37,6 +39,8 @@ window.createGame=async()=>{
 
     await joinToGame(gameCode);
 };
+
+/* ================= JOIN GAME ================= */
 
 window.joinGame=async()=>{
 
@@ -84,6 +88,8 @@ async function joinToGame(gameCode){
     await loadPlayers(gameCode);
 }
 
+/* ================= HOST CHECK ================= */
+
 async function checkHost(gameCode){
 
     const { data,error }=await supabase
@@ -104,6 +110,8 @@ async function checkHost(gameCode){
         btn.style.display=isHost?"inline-block":"none";
     }
 }
+
+/* ================= LOAD PLAYERS (NO ROLE LEAKS) ================= */
 
 async function loadPlayers(gameCode){
 
@@ -136,10 +144,14 @@ async function loadPlayers(gameCode){
             text+=" 👑";
         }
 
+        // 🚨 IMPORTANT: NO ROLE DISPLAY HERE
         li.textContent=text;
+
         list.appendChild(li);
     });
 }
+
+/* ================= REALTIME PLAYERS ================= */
 
 function subscribeToPlayers(gameCode){
 
@@ -158,6 +170,8 @@ function subscribeToPlayers(gameCode){
         )
         .subscribe();
 }
+
+/* ================= GAME STATE WATCH ================= */
 
 function subscribeToGame(gameCode){
 
@@ -180,6 +194,8 @@ function subscribeToGame(gameCode){
         )
         .subscribe();
 }
+
+/* ================= ROLE LOGIC ================= */
 
 function shuffle(arr){
     return arr.sort(()=>Math.random()-0.5);
@@ -228,6 +244,8 @@ async function assignRoles(){
     }
 }
 
+/* ================= START GAME ================= */
+
 window.startGame=async()=>{
 
     if(!isHost){
@@ -252,8 +270,11 @@ window.startGame=async()=>{
     alert("Game started");
 };
 
+/* ================= ROLE SCREEN ================= */
+
 async function showRoleScreen(){
 
+    document.getElementById("joinScreen").style.display="none";
     document.getElementById("lobbyScreen").style.display="none";
     document.getElementById("roleScreen").style.display="block";
 
